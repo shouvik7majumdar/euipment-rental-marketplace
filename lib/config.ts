@@ -1,0 +1,46 @@
+import { ContractConfig } from '@/types';
+
+export const STELLAR_NETWORK = process.env.NEXT_PUBLIC_STELLAR_NETWORK || 'testnet';
+
+export const CONTRACT_CONFIG: ContractConfig = {
+  contractId: process.env.NEXT_PUBLIC_CONTRACT_ID || 'CONTRACT_ADDRESS_HERE',
+  tokenContractId: process.env.NEXT_PUBLIC_TOKEN_CONTRACT_ID || 'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC',
+  networkPassphrase: process.env.NEXT_PUBLIC_STELLAR_NETWORK_PASSPHRASE || 'Test SDF Network ; September 2015',
+  rpcUrl: process.env.NEXT_PUBLIC_SOROBAN_RPC_URL || 'https://soroban-testnet.stellar.org',
+};
+
+export const HORIZON_URL = process.env.NEXT_PUBLIC_HORIZON_URL || 'https://horizon-testnet.stellar.org';
+
+export const EXPLORER_BASE_URL = 'https://stellar.expert/explorer/testnet';
+
+export const POLL_INTERVAL_MS = 5_000; // 5 seconds for real-time event polling
+
+export const STROOPS_PER_XLM = 10_000_000n;
+
+export function stroopsToXLM(stroops: bigint): string {
+  const xlm = Number(stroops) / Number(STROOPS_PER_XLM);
+  return xlm.toFixed(7);
+}
+
+export function xlmToStroops(xlm: string): bigint {
+  const val = parseFloat(xlm);
+  if (isNaN(val) || val < 0) return 0n;
+  return BigInt(Math.round(val * Number(STROOPS_PER_XLM)));
+}
+
+export function truncateAddress(address: string): string {
+  if (!address || address.length < 12) return address;
+  return `${address.slice(0, 6)}...${address.slice(-4)}`;
+}
+
+export function getExplorerTxUrl(hash: string): string {
+  return `${EXPLORER_BASE_URL}/tx/${hash}`;
+}
+
+export function getExplorerAccountUrl(address: string): string {
+  return `${EXPLORER_BASE_URL}/account/${address}`;
+}
+
+export function formatTimestamp(ts: number): string {
+  return new Date(ts * 1000).toLocaleString();
+}

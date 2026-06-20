@@ -1,0 +1,7 @@
+C:\Users\user\OneDrive\Desktop\rise in\contracts\rental_marketplace\target-cli\debug\deps\equivalent-423476c4b7584ef7.d: C:\Users\user\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\equivalent-1.0.2\src\lib.rs
+
+C:\Users\user\OneDrive\Desktop\rise in\contracts\rental_marketplace\target-cli\debug\deps\libequivalent-423476c4b7584ef7.rlib: C:\Users\user\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\equivalent-1.0.2\src\lib.rs
+
+C:\Users\user\OneDrive\Desktop\rise in\contracts\rental_marketplace\target-cli\debug\deps\libequivalent-423476c4b7584ef7.rmeta: C:\Users\user\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\equivalent-1.0.2\src\lib.rs
+
+C:\Users\user\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\equivalent-1.0.2\src\lib.rs:
