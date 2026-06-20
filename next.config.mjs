@@ -1,10 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  swcMinify: true,
-  experimental: {
-    serverComponentsExternalPackages: ['@stellar/stellar-sdk'],
-  },
+  serverExternalPackages: ['@stellar/stellar-sdk'],
   webpack: (config, { isServer }) => {
     if (!isServer) {
       config.resolve.fallback = {

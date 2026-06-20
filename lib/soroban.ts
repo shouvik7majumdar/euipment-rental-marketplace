@@ -2,21 +2,22 @@
 
 import {
   Contract,
-  Networks,
-  SorobanRpc,
   TransactionBuilder,
   BASE_FEE,
   xdr,
   Address,
   nativeToScVal,
   scValToNative,
-  Keypair,
 } from '@stellar/stellar-sdk';
+import { Server, Api } from '@stellar/stellar-sdk/rpc';
 import { CONTRACT_CONFIG, HORIZON_URL } from '@/lib/config';
 import { signTransaction } from '@/lib/wallet';
-import { EquipmentListing, TrackedTransaction } from '@/types';
+import { EquipmentListing } from '@/types';
 
-const rpc = new SorobanRpc.Server(CONTRACT_CONFIG.rpcUrl);
+
+import { toast } from 'sonner';
+
+const rpc = new Server(CONTRACT_CONFIG.rpcUrl);
 
 // ─── helpers ───────────────────────────────────────────────────────────────
 
@@ -39,40 +40,100 @@ async function buildAndSubmitTx(
   sourceAddress: string,
   contractOp: xdr.Operation,
 ): Promise<string> {
-  const account = await rpc.getAccount(sourceAddress);
+  let account;
+  try {
+    account = await rpc.getAccount(sourceAddress);
+  } catch (err: any) {
+    const isNotFound = err && (
+      err.message?.includes('not found') || 
+      err.message?.includes('404') || 
+      String(err).includes('not found')
+    );
+    if (isNotFound) {
+      toast.info('Account not found on-chain. Funding via Friendbot...');
+      try {
+        const friendbotRes = await fetch(`https://friendbot.stellar.org/?addr=${sourceAddress}`);
+        if (!friendbotRes.ok) {
+          throw new Error(`Friendbot responded with status ${friendbotRes.status}`);
+        }
+        // Wait for ledger close
+        await new Promise((resolve) => setTimeout(resolve, 4000));
+        account = await rpc.getAccount(sourceAddress);
+        toast.success('Account successfully funded and created on-chain!');
+      } catch (fundErr: any) {
+        const msg = fundErr instanceof Error ? fundErr.message : String(fundErr);
+        throw new Error(`Account is not funded. Auto-funding via Friendbot failed: ${msg}. Please fund your wallet manually.`);
+      }
+    } else {
+      throw new Error(`Failed to fetch account info: ${err.message || err}`);
+    }
+  }
 
-  const tx = new TransactionBuilder(account, {
-    fee: BASE_FEE,
-    networkPassphrase: CONTRACT_CONFIG.networkPassphrase,
-  })
-    .addOperation(contractOp)
-    .setTimeout(30)
-    .build();
+  let tx;
+  try {
+    tx = new TransactionBuilder(account, {
+      fee: BASE_FEE,
+      networkPassphrase: CONTRACT_CONFIG.networkPassphrase,
+    })
+      .addOperation(contractOp)
+      .setTimeout(30)
+      .build();
+  } catch (err: any) {
+    throw new Error(`Failed to build transaction: ${err.message || err}`);
+  }
 
-  const preparedTx = await rpc.prepareTransaction(tx);
-  const signedXdr = await signTransaction(preparedTx.toXDR(), {
-    networkPassphrase: CONTRACT_CONFIG.networkPassphrase,
-    address: sourceAddress,
-  });
+  let preparedTx;
+  try {
+    preparedTx = await rpc.prepareTransaction(tx);
+  } catch (err: any) {
+    throw new Error(`Transaction simulation failed: ${err.message || err}. Make sure you have enough XLM to pay for fees.`);
+  }
 
-  const result = await rpc.sendTransaction(
-    TransactionBuilder.fromXDR(signedXdr, CONTRACT_CONFIG.networkPassphrase)
-  );
+  let signedXdr;
+  try {
+    toast.info('Please approve the transaction in your wallet...');
+    signedXdr = await signTransaction(preparedTx.toXDR(), {
+      networkPassphrase: CONTRACT_CONFIG.networkPassphrase,
+      address: sourceAddress,
+    });
+  } catch (err: any) {
+    throw new Error(`Signing failed or cancelled: ${err.message || err}`);
+  }
+
+  let signedTx;
+  try {
+    signedTx = TransactionBuilder.fromXDR(
+      signedXdr,
+      CONTRACT_CONFIG.networkPassphrase
+    );
+  } catch (err: any) {
+    throw new Error(`Failed to parse signed transaction XDR: ${err.message || err}`);
+  }
+
+  let result;
+  try {
+    result = await rpc.sendTransaction(signedTx as Parameters<typeof rpc.sendTransaction>[0]);
+  } catch (err: any) {
+    throw new Error(`Failed to send transaction: ${err.message || err}`);
+  }
 
   if (result.status === 'ERROR') {
-    throw new Error(`Transaction failed: ${result.errorResult?.toXDR('base64')}`);
+    const errDetail = result.errorResult
+      ? result.errorResult.toXDR('base64')
+      : 'unknown error';
+    throw new Error(`Transaction submission failed: ${errDetail}`);
   }
 
   // Poll for confirmation
   const hash = result.hash;
   let attempts = 0;
-  while (attempts < 20) {
-    await new Promise(r => setTimeout(r, 1500));
+  while (attempts < 25) {
+    await new Promise(r => setTimeout(r, 2000));
     const status = await rpc.getTransaction(hash);
-    if (status.status === SorobanRpc.Api.GetTransactionStatus.SUCCESS) {
+    if (status.status === Api.GetTransactionStatus.SUCCESS) {
       return hash;
     }
-    if (status.status === SorobanRpc.Api.GetTransactionStatus.FAILED) {
+    if (status.status === Api.GetTransactionStatus.FAILED) {
       throw new Error(`Transaction ${hash} failed on-chain`);
     }
     attempts++;
@@ -95,10 +156,10 @@ export async function getTotalListings(): Promise<number> {
     .build();
 
   const result = await rpc.simulateTransaction(tx);
-  if (SorobanRpc.Api.isSimulationError(result)) {
+  if (Api.isSimulationError(result)) {
     throw new Error(`Simulation failed: ${result.error}`);
   }
-  const parsed = result as SorobanRpc.Api.SimulateTransactionSuccessResponse;
+  const parsed = result as Api.SimulateTransactionSuccessResponse;
   return scValToNative(parsed.result!.retval) as number;
 }
 
@@ -117,12 +178,13 @@ export async function getListing(id: number): Promise<EquipmentListing | null> {
     .build();
 
   const result = await rpc.simulateTransaction(tx);
-  if (SorobanRpc.Api.isSimulationError(result)) return null;
-  const parsed = result as SorobanRpc.Api.SimulateTransactionSuccessResponse;
+  if (Api.isSimulationError(result)) return null;
+  const parsed = result as Api.SimulateTransactionSuccessResponse;
   const native = scValToNative(parsed.result!.retval);
   if (native === null || native === undefined) return null;
   return scValToListing(parsed.result!.retval);
 }
+
 
 export async function getAllListings(): Promise<EquipmentListing[]> {
   const total = await getTotalListings();

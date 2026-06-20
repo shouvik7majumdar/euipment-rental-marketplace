@@ -18,7 +18,7 @@ const navLinks = [
 
 export function Header() {
   const pathname = usePathname();
-  const { isConnected, address, connect, disconnect } = useWallet();
+  const { isConnected, address, xlmBalance, connect, disconnect } = useWallet();
   const [showWalletModal, setShowWalletModal] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -54,7 +54,11 @@ export function Header() {
                 <div className="flex items-center gap-2">
                   <div className="hidden sm:flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/10 px-3 py-1.5 text-sm">
                     <span className="h-2 w-2 rounded-full bg-green-400 animate-pulse" />
-                    <span className="font-mono text-primary">{truncateAddress(address)}</span>
+                    <span className="font-semibold text-primary">
+                      {xlmBalance ? parseFloat(xlmBalance).toLocaleString(undefined, { maximumFractionDigits: 2 }) : '0'} XLM
+                    </span>
+                    <span className="text-white/20">|</span>
+                    <span className="font-mono text-muted-foreground">{truncateAddress(address)}</span>
                   </div>
                   <button
                     onClick={disconnect}

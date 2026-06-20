@@ -298,10 +298,12 @@ export default function Marketplace() {
                   <input
                     type="number"
                     step="0.0000001"
+                    min="0"
                     required
                     placeholder="e.g. 5"
                     value={listPrice}
-                    onChange={(e) => setListPrice(e.target.value)}
+                    onKeyDown={(e) => e.key === '-' && e.preventDefault()}
+                    onChange={(e) => setListPrice(e.target.value.replace(/-/g, ''))}
                     className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white focus:border-primary/50 focus:outline-none"
                   />
                 </div>
@@ -310,10 +312,12 @@ export default function Marketplace() {
                   <input
                     type="number"
                     step="0.0000001"
+                    min="0"
                     required
                     placeholder="e.g. 100"
                     value={listDeposit}
-                    onChange={(e) => setListDeposit(e.target.value)}
+                    onKeyDown={(e) => e.key === '-' && e.preventDefault()}
+                    onChange={(e) => setListDeposit(e.target.value.replace(/-/g, ''))}
                     className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white focus:border-primary/50 focus:outline-none"
                   />
                 </div>

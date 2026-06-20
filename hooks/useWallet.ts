@@ -18,7 +18,24 @@ export function useWallet() {
     store.setError(null);
     try {
       const address = await connectWallet(walletId);
-      const balance = await getXLMBalance(address);
+      let balance = await getXLMBalance(address);
+      
+      // Auto-fund new/empty testnet accounts
+      if (balance === '0') {
+        try {
+          toast.info('Funding account with Testnet XLM via Friendbot...');
+          const res = await fetch(`https://friendbot.stellar.org/?addr=${address}`);
+          if (res.ok) {
+            // Wait for ledger close
+            await new Promise((resolve) => setTimeout(resolve, 4000));
+            balance = await getXLMBalance(address);
+            toast.success('Account funded with 10,000 Testnet XLM!');
+          }
+        } catch (fundErr) {
+          console.error('Auto-funding failed:', fundErr);
+        }
+      }
+
       store.setConnected(address, balance);
       toast.success('Wallet connected!', {
         description: `${address.slice(0, 8)}...${address.slice(-4)}`,
