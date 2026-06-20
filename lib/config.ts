@@ -28,9 +28,11 @@ export function xlmToStroops(xlm: string): bigint {
   return BigInt(Math.round(val * Number(STROOPS_PER_XLM)));
 }
 
-export function truncateAddress(address: string): string {
-  if (!address || address.length < 12) return address;
-  return `${address.slice(0, 6)}...${address.slice(-4)}`;
+export function truncateAddress(address: any): string {
+  if (!address) return '';
+  const str = String(address);
+  if (str.length < 12) return str;
+  return `${str.slice(0, 6)}...${str.slice(-4)}`;
 }
 
 export function getExplorerTxUrl(hash: string): string {

@@ -192,4 +192,102 @@ impl RentalMarketplaceContract {
             (refund_deposit, renter),
         );
     }
+
+    pub fn edit_equipment(
+        env: Env,
+        owner: Address,
+        id: u32,
+        title: String,
+        daily_price: i128,
+        deposit: i128,
+    ) {
+        owner.require_auth();
+        let mut listing: EquipmentListing = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Listing(id))
+            .unwrap_or_else(|| panic!("Listing not found"));
+
+        if listing.owner != owner {
+            panic!("Not owner");
+        }
+        if !listing.is_available {
+            panic!("Cannot edit equipment while unavailable or rented");
+        }
+        if daily_price <= 0 {
+            panic!("Daily price must be positive");
+        }
+        if deposit < 0 {
+            panic!("Deposit cannot be negative");
+        }
+
+        listing.title = title;
+        listing.daily_price = daily_price;
+        listing.deposit = deposit;
+
+        env.storage().persistent().set(&DataKey::Listing(id), &listing);
+        env.events().publish((symbol_short!("edited"), id, owner), (daily_price, deposit));
+    }
+
+    pub fn delete_equipment(env: Env, owner: Address, id: u32) {
+        owner.require_auth();
+        let listing: EquipmentListing = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Listing(id))
+            .unwrap_or_else(|| panic!("Listing not found"));
+
+        if listing.owner != owner {
+            panic!("Not owner");
+        }
+        if !listing.is_available && listing.current_renter.is_some() {
+            panic!("Cannot delete currently rented equipment");
+        }
+
+        env.storage().persistent().remove(&DataKey::Listing(id));
+        env.events().publish((symbol_short!("deleted"), id), owner);
+    }
+
+    pub fn mark_unavailable(env: Env, owner: Address, id: u32) {
+        owner.require_auth();
+        let mut listing: EquipmentListing = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Listing(id))
+            .unwrap_or_else(|| panic!("Listing not found"));
+
+        if listing.owner != owner {
+            panic!("Not owner");
+        }
+        if !listing.is_available {
+            panic!("Equipment is already unavailable");
+        }
+
+        listing.is_available = false;
+        env.storage().persistent().set(&DataKey::Listing(id), &listing);
+        env.events().publish((symbol_short!("unavail"), id), owner);
+    }
+
+    pub fn mark_available(env: Env, owner: Address, id: u32) {
+        owner.require_auth();
+        let mut listing: EquipmentListing = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Listing(id))
+            .unwrap_or_else(|| panic!("Listing not found"));
+
+        if listing.owner != owner {
+            panic!("Not owner");
+        }
+        if listing.is_available {
+            panic!("Equipment is already available");
+        }
+        if listing.current_renter.is_some() {
+            panic!("Cannot mark available while rented on-chain");
+        }
+
+        listing.is_available = true;
+        env.storage().persistent().set(&DataKey::Listing(id), &listing);
+        env.events().publish((symbol_short!("avail"), id), owner);
+    }
 }

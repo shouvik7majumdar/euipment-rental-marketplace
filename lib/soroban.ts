@@ -86,7 +86,7 @@ export async function getTotalListings(): Promise<number> {
   const contract = new Contract(CONTRACT_CONFIG.contractId);
   const tx = new TransactionBuilder(
     await rpc.getAccount(
-      'GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN' // dummy source for reads
+      'GBPM3ERJPONOYNS3H4N4VJDA7TGQT6TLBJCUPQ3YZ5IAMHIDFUPTCIW3' // dummy source for reads
     ),
     { fee: BASE_FEE, networkPassphrase: CONTRACT_CONFIG.networkPassphrase }
   )
@@ -106,7 +106,7 @@ export async function getListing(id: number): Promise<EquipmentListing | null> {
   const contract = new Contract(CONTRACT_CONFIG.contractId);
   const tx = new TransactionBuilder(
     await rpc.getAccount(
-      'GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN'
+      'GBPM3ERJPONOYNS3H4N4VJDA7TGQT6TLBJCUPQ3YZ5IAMHIDFUPTCIW3'
     ),
     { fee: BASE_FEE, networkPassphrase: CONTRACT_CONFIG.networkPassphrase }
   )
@@ -178,6 +178,64 @@ export async function returnEquipment(
     'return_equipment',
     nativeToScVal(listingId, { type: 'u32' }),
     nativeToScVal(refundDeposit, { type: 'bool' }),
+  );
+  return buildAndSubmitTx(ownerAddress, op);
+}
+
+export async function editEquipment(
+  ownerAddress: string,
+  listingId: number,
+  title: string,
+  dailyPriceStroops: bigint,
+  depositStroops: bigint,
+): Promise<string> {
+  const contract = new Contract(CONTRACT_CONFIG.contractId);
+  const op = contract.call(
+    'edit_equipment',
+    new Address(ownerAddress).toScVal(),
+    nativeToScVal(listingId, { type: 'u32' }),
+    nativeToScVal(title, { type: 'string' }),
+    nativeToScVal(dailyPriceStroops, { type: 'i128' }),
+    nativeToScVal(depositStroops, { type: 'i128' }),
+  );
+  return buildAndSubmitTx(ownerAddress, op);
+}
+
+export async function deleteEquipment(
+  ownerAddress: string,
+  listingId: number,
+): Promise<string> {
+  const contract = new Contract(CONTRACT_CONFIG.contractId);
+  const op = contract.call(
+    'delete_equipment',
+    new Address(ownerAddress).toScVal(),
+    nativeToScVal(listingId, { type: 'u32' }),
+  );
+  return buildAndSubmitTx(ownerAddress, op);
+}
+
+export async function markUnavailable(
+  ownerAddress: string,
+  listingId: number,
+): Promise<string> {
+  const contract = new Contract(CONTRACT_CONFIG.contractId);
+  const op = contract.call(
+    'mark_unavailable',
+    new Address(ownerAddress).toScVal(),
+    nativeToScVal(listingId, { type: 'u32' }),
+  );
+  return buildAndSubmitTx(ownerAddress, op);
+}
+
+export async function markAvailable(
+  ownerAddress: string,
+  listingId: number,
+): Promise<string> {
+  const contract = new Contract(CONTRACT_CONFIG.contractId);
+  const op = contract.call(
+    'mark_available',
+    new Address(ownerAddress).toScVal(),
+    nativeToScVal(listingId, { type: 'u32' }),
   );
   return buildAndSubmitTx(ownerAddress, op);
 }

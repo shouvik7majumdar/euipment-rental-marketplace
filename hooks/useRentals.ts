@@ -9,6 +9,10 @@ import {
   listEquipment,
   rentEquipment,
   returnEquipment,
+  editEquipment,
+  deleteEquipment,
+  markUnavailable,
+  markAvailable,
 } from '@/lib/soroban';
 import { useTransactionStore } from '@/lib/store';
 import { EquipmentListing, RentalActivity } from '@/types';
@@ -172,6 +176,190 @@ export function useReturnEquipment() {
     },
     onError: (err: Error) => {
       toast.error('Failed to return equipment', { description: err.message });
+    },
+  });
+}
+
+export function useEditEquipment() {
+  const qc = useQueryClient();
+  const { addTransaction, updateTransaction } = useTransactionStore();
+
+  return useMutation({
+    mutationFn: async ({
+      ownerAddress,
+      listingId,
+      title,
+      dailyPriceStroops,
+      depositStroops,
+    }: {
+      ownerAddress: string;
+      listingId: number;
+      title: string;
+      dailyPriceStroops: bigint;
+      depositStroops: bigint;
+    }) => {
+      const txId = nanoid();
+      addTransaction({
+        id: txId,
+        hash: '',
+        type: 'edit_equipment',
+        status: 'pending',
+        description: `Editing listing #${listingId}`,
+        timestamp: Math.floor(Date.now() / 1000),
+        listingId,
+      });
+
+      try {
+        const hash = await editEquipment(
+          ownerAddress,
+          listingId,
+          title,
+          dailyPriceStroops,
+          depositStroops
+        );
+        updateTransaction(txId, { hash, status: 'success' });
+        return hash;
+      } catch (e) {
+        updateTransaction(txId, { status: 'failed', errorMessage: String(e) });
+        throw e;
+      }
+    },
+    onSuccess: (_, variables) => {
+      qc.invalidateQueries({ queryKey: ['listings'] });
+      qc.invalidateQueries({ queryKey: ['listing', variables.listingId] });
+      toast.success('Equipment updated successfully!');
+    },
+    onError: (err: Error) => {
+      toast.error('Failed to edit equipment', { description: err.message });
+    },
+  });
+}
+
+export function useDeleteEquipment() {
+  const qc = useQueryClient();
+  const { addTransaction, updateTransaction } = useTransactionStore();
+
+  return useMutation({
+    mutationFn: async ({
+      ownerAddress,
+      listingId,
+    }: {
+      ownerAddress: string;
+      listingId: number;
+    }) => {
+      const txId = nanoid();
+      addTransaction({
+        id: txId,
+        hash: '',
+        type: 'delete_equipment',
+        status: 'pending',
+        description: `Deleting listing #${listingId}`,
+        timestamp: Math.floor(Date.now() / 1000),
+        listingId,
+      });
+
+      try {
+        const hash = await deleteEquipment(ownerAddress, listingId);
+        updateTransaction(txId, { hash, status: 'success' });
+        return hash;
+      } catch (e) {
+        updateTransaction(txId, { status: 'failed', errorMessage: String(e) });
+        throw e;
+      }
+    },
+    onSuccess: (_, variables) => {
+      qc.invalidateQueries({ queryKey: ['listings'] });
+      qc.invalidateQueries({ queryKey: ['listing', variables.listingId] });
+      toast.success('Equipment deleted successfully!');
+    },
+    onError: (err: Error) => {
+      toast.error('Failed to delete equipment', { description: err.message });
+    },
+  });
+}
+
+export function useMarkUnavailable() {
+  const qc = useQueryClient();
+  const { addTransaction, updateTransaction } = useTransactionStore();
+
+  return useMutation({
+    mutationFn: async ({
+      ownerAddress,
+      listingId,
+    }: {
+      ownerAddress: string;
+      listingId: number;
+    }) => {
+      const txId = nanoid();
+      addTransaction({
+        id: txId,
+        hash: '',
+        type: 'mark_unavailable',
+        status: 'pending',
+        description: `Marking listing #${listingId} as unavailable`,
+        timestamp: Math.floor(Date.now() / 1000),
+        listingId,
+      });
+
+      try {
+        const hash = await markUnavailable(ownerAddress, listingId);
+        updateTransaction(txId, { hash, status: 'success' });
+        return hash;
+      } catch (e) {
+        updateTransaction(txId, { status: 'failed', errorMessage: String(e) });
+        throw e;
+      }
+    },
+    onSuccess: (_, variables) => {
+      qc.invalidateQueries({ queryKey: ['listings'] });
+      qc.invalidateQueries({ queryKey: ['listing', variables.listingId] });
+      toast.success('Equipment marked as unavailable!');
+    },
+    onError: (err: Error) => {
+      toast.error('Failed to update availability', { description: err.message });
+    },
+  });
+}
+
+export function useMarkAvailable() {
+  const qc = useQueryClient();
+  const { addTransaction, updateTransaction } = useTransactionStore();
+
+  return useMutation({
+    mutationFn: async ({
+      ownerAddress,
+      listingId,
+    }: {
+      ownerAddress: string;
+      listingId: number;
+    }) => {
+      const txId = nanoid();
+      addTransaction({
+        id: txId,
+        hash: '',
+        type: 'mark_available',
+        status: 'pending',
+        description: `Marking listing #${listingId} as available`,
+        timestamp: Math.floor(Date.now() / 1000),
+        listingId,
+      });
+
+      try {
+        const hash = await markAvailable(ownerAddress, listingId);
+        updateTransaction(txId, { hash, status: 'success' });
+        return hash;
+      } catch (e) {
+        updateTransaction(txId, { status: 'failed', errorMessage: String(e) });
+        throw e;
+      }
+    },
+    onSuccess: (_, variables) => {
+      qc.invalidateQueries({ queryKey: ['listings'] });
+      qc.invalidateQueries({ queryKey: ['listing', variables.listingId] });
+      toast.success('Equipment marked as available!');
+    },
+    onError: (err: Error) => {
+      toast.error('Failed to update availability', { description: err.message });
     },
   });
 }

@@ -1,17 +1,24 @@
 'use client';
 
-import { useListings, useReturnEquipment } from '@/hooks/useRentals';
+import { useListings, useReturnEquipment, useDeleteEquipment, useMarkUnavailable, useMarkAvailable } from '@/hooks/useRentals';
 import { useWallet } from '@/hooks/useWallet';
-import { Package, ShieldAlert, Clock, AlertTriangle, ShieldCheck, Loader2, ArrowUpRight } from 'lucide-react';
+import { Package, ShieldAlert, Clock, AlertTriangle, ShieldCheck, Loader2, ArrowUpRight, Edit2, Trash2, PowerOff, Power } from 'lucide-react';
 import { stroopsToXLM, truncateAddress, formatTimestamp } from '@/lib/config';
 import { WalletModal } from '@/components/wallet/WalletModal';
+import { EditListingModal } from '@/components/EditListingModal';
 import { useState } from 'react';
+import { EquipmentListing } from '@/types';
 
 export default function Dashboard() {
   const { address, isConnected } = useWallet();
   const { data: listings, isLoading } = useListings();
   const returnMutation = useReturnEquipment();
+  const deleteMutation = useDeleteEquipment();
+  const markUnavailableMutation = useMarkUnavailable();
+  const markAvailableMutation = useMarkAvailable();
+  
   const [showWalletModal, setShowWalletModal] = useState(false);
+  const [editingListing, setEditingListing] = useState<EquipmentListing | null>(null);
 
   if (!isConnected || !address) {
     return (
@@ -48,6 +55,23 @@ export default function Dashboard() {
     } catch {
       // handled by mutation
     }
+  };
+
+  const handleDelete = async (listingId: number) => {
+    if (!confirm('Are you sure you want to delete this listing?')) return;
+    try {
+      await deleteMutation.mutateAsync({ ownerAddress: address, listingId });
+    } catch { }
+  };
+
+  const handleToggleAvailability = async (listingId: number, isAvailable: boolean) => {
+    try {
+      if (isAvailable) {
+        await markUnavailableMutation.mutateAsync({ ownerAddress: address, listingId });
+      } else {
+        await markAvailableMutation.mutateAsync({ ownerAddress: address, listingId });
+      }
+    } catch { }
   };
 
   return (
@@ -107,7 +131,7 @@ export default function Dashboard() {
                       </div>
                     </div>
 
-                    {!listing.isAvailable && (
+                    {!listing.isAvailable && listing.currentRenter ? (
                       <div className="rounded-lg bg-white/5 border border-white/5 p-3.5 space-y-3 mb-4">
                         <div className="flex justify-between text-xs">
                           <span className="text-muted-foreground">Renter Address</span>
@@ -154,6 +178,54 @@ export default function Dashboard() {
                             Claim Deposit
                           </button>
                         </div>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col gap-2 mt-4">
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => setEditingListing(listing)}
+                            disabled={!listing.isAvailable && !!listing.currentRenter}
+                            className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-white/5 py-2 text-xs font-semibold text-white hover:bg-white/10 transition-all disabled:opacity-50"
+                          >
+                            <Edit2 className="h-3.5 w-3.5" />
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleToggleAvailability(listing.id, listing.isAvailable)}
+                            disabled={markAvailableMutation.isPending || markUnavailableMutation.isPending}
+                            className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg border py-2 text-xs font-semibold transition-all disabled:opacity-50 ${
+                              listing.isAvailable
+                                ? 'border-yellow-500/30 bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500/20'
+                                : 'border-green-500/30 bg-green-500/10 text-green-400 hover:bg-green-500/20'
+                            }`}
+                          >
+                            {markAvailableMutation.isPending || markUnavailableMutation.isPending ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : listing.isAvailable ? (
+                              <>
+                                <PowerOff className="h-3.5 w-3.5" />
+                                Mark Unavailable
+                              </>
+                            ) : (
+                              <>
+                                <Power className="h-3.5 w-3.5" />
+                                Mark Available
+                              </>
+                            )}
+                          </button>
+                        </div>
+                        <button
+                          onClick={() => handleDelete(listing.id)}
+                          disabled={deleteMutation.isPending || (!listing.isAvailable && !!listing.currentRenter)}
+                          className="w-full flex items-center justify-center gap-1.5 rounded-lg border border-destructive/30 bg-destructive/10 py-2 text-xs font-semibold text-destructive hover:bg-destructive/20 transition-all disabled:opacity-50"
+                        >
+                          {deleteMutation.isPending ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-3.5 w-3.5" />
+                          )}
+                          Delete Listing
+                        </button>
                       </div>
                     )}
                   </div>
@@ -237,6 +309,13 @@ export default function Dashboard() {
           )}
         </div>
       </div>
+
+      <EditListingModal
+        open={!!editingListing}
+        onClose={() => setEditingListing(null)}
+        listing={editingListing}
+        ownerAddress={address}
+      />
     </div>
   );
 }
