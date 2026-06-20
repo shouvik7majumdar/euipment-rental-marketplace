@@ -39,10 +39,15 @@ function scValToListing(val: xdr.ScVal): EquipmentListing {
 async function buildAndSubmitTx(
   sourceAddress: string,
   contractOp: xdr.Operation,
+  methodName?: string,
 ): Promise<string> {
+  console.log(`[soroban] buildAndSubmitTx START — method: ${methodName}, source: ${sourceAddress}`);
+
   let account;
   try {
+    console.log('[soroban] Step 1: Fetching account from RPC...');
     account = await rpc.getAccount(sourceAddress);
+    console.log('[soroban] Step 1: Account fetched successfully');
   } catch (err: any) {
     const isNotFound = err && (
       err.message?.includes('not found') || 
@@ -60,6 +65,7 @@ async function buildAndSubmitTx(
         await new Promise((resolve) => setTimeout(resolve, 4000));
         account = await rpc.getAccount(sourceAddress);
         toast.success('Account successfully funded and created on-chain!');
+        console.log('[soroban] Step 1: Account funded via Friendbot');
       } catch (fundErr: any) {
         const msg = fundErr instanceof Error ? fundErr.message : String(fundErr);
         throw new Error(`Account is not funded. Auto-funding via Friendbot failed: ${msg}. Please fund your wallet manually.`);
@@ -71,6 +77,7 @@ async function buildAndSubmitTx(
 
   let tx;
   try {
+    console.log('[soroban] Step 2: Building transaction...');
     tx = new TransactionBuilder(account, {
       fee: BASE_FEE,
       networkPassphrase: CONTRACT_CONFIG.networkPassphrase,
@@ -78,25 +85,54 @@ async function buildAndSubmitTx(
       .addOperation(contractOp)
       .setTimeout(30)
       .build();
+    console.log('[soroban] Step 2: Transaction built successfully');
   } catch (err: any) {
     throw new Error(`Failed to build transaction: ${err.message || err}`);
   }
 
   let preparedTx;
   try {
+    console.log('[soroban] Step 3: Simulating/preparing transaction...');
     preparedTx = await rpc.prepareTransaction(tx);
+    console.log('[soroban] Step 3: Transaction prepared successfully');
   } catch (err: any) {
-    throw new Error(`Transaction simulation failed: ${err.message || err}. Make sure you have enough XLM to pay for fees.`);
+    const rawMsg = err.message || String(err);
+    let friendlyMsg = rawMsg;
+    
+    if (rawMsg.includes('UnreachableCodeReached') || rawMsg.includes('HostError') || rawMsg.includes('InvalidAction')) {
+      if (methodName === 'edit_equipment') {
+        friendlyMsg = 'Cannot edit equipment while it is unavailable or rented.';
+      } else if (methodName === 'delete_equipment') {
+        friendlyMsg = 'Cannot delete equipment while it is currently rented.';
+      } else if (methodName === 'rent_equipment') {
+        friendlyMsg = 'Equipment is already rented or unavailable.';
+      } else if (methodName === 'return_equipment') {
+        friendlyMsg = 'Equipment is not currently rented.';
+      } else if (methodName === 'mark_unavailable') {
+        friendlyMsg = 'Equipment is already unavailable.';
+      } else if (methodName === 'mark_available') {
+        friendlyMsg = 'Cannot mark available while it is rented on-chain.';
+      } else {
+        friendlyMsg = 'Transaction rejected by smart contract rules.';
+      }
+    } else {
+      friendlyMsg = `Simulation failed: ${rawMsg}. Make sure you have enough XLM to pay for fees.`;
+    }
+    
+    throw new Error(friendlyMsg);
   }
 
   let signedXdr;
   try {
+    console.log('[soroban] Step 4: Requesting wallet signature (Freighter popup should appear NOW)...');
     toast.info('Please approve the transaction in your wallet...');
     signedXdr = await signTransaction(preparedTx.toXDR(), {
       networkPassphrase: CONTRACT_CONFIG.networkPassphrase,
       address: sourceAddress,
     });
+    console.log('[soroban] Step 4: Transaction signed by wallet');
   } catch (err: any) {
+    console.error('[soroban] Step 4 FAILED: Signing error:', err);
     throw new Error(`Signing failed or cancelled: ${err.message || err}`);
   }
 
@@ -212,7 +248,7 @@ export async function listEquipment(
     nativeToScVal(dailyPriceStroops, { type: 'i128' }),
     nativeToScVal(depositStroops, { type: 'i128' }),
   );
-  return buildAndSubmitTx(ownerAddress, op);
+  return buildAndSubmitTx(ownerAddress, op, 'list_equipment');
 }
 
 export async function rentEquipment(
@@ -227,7 +263,7 @@ export async function rentEquipment(
     nativeToScVal(listingId, { type: 'u32' }),
     nativeToScVal(days, { type: 'u32' }),
   );
-  return buildAndSubmitTx(renterAddress, op);
+  return buildAndSubmitTx(renterAddress, op, 'rent_equipment');
 }
 
 export async function returnEquipment(
@@ -241,7 +277,7 @@ export async function returnEquipment(
     nativeToScVal(listingId, { type: 'u32' }),
     nativeToScVal(refundDeposit, { type: 'bool' }),
   );
-  return buildAndSubmitTx(ownerAddress, op);
+  return buildAndSubmitTx(ownerAddress, op, 'return_equipment');
 }
 
 export async function editEquipment(
@@ -260,7 +296,7 @@ export async function editEquipment(
     nativeToScVal(dailyPriceStroops, { type: 'i128' }),
     nativeToScVal(depositStroops, { type: 'i128' }),
   );
-  return buildAndSubmitTx(ownerAddress, op);
+  return buildAndSubmitTx(ownerAddress, op, 'edit_equipment');
 }
 
 export async function deleteEquipment(
@@ -273,7 +309,7 @@ export async function deleteEquipment(
     new Address(ownerAddress).toScVal(),
     nativeToScVal(listingId, { type: 'u32' }),
   );
-  return buildAndSubmitTx(ownerAddress, op);
+  return buildAndSubmitTx(ownerAddress, op, 'delete_equipment');
 }
 
 export async function markUnavailable(
@@ -286,7 +322,7 @@ export async function markUnavailable(
     new Address(ownerAddress).toScVal(),
     nativeToScVal(listingId, { type: 'u32' }),
   );
-  return buildAndSubmitTx(ownerAddress, op);
+  return buildAndSubmitTx(ownerAddress, op, 'mark_unavailable');
 }
 
 export async function markAvailable(
@@ -299,7 +335,7 @@ export async function markAvailable(
     new Address(ownerAddress).toScVal(),
     nativeToScVal(listingId, { type: 'u32' }),
   );
-  return buildAndSubmitTx(ownerAddress, op);
+  return buildAndSubmitTx(ownerAddress, op, 'mark_available');
 }
 
 // ─── balance query ─────────────────────────────────────────────────────────

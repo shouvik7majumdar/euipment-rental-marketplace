@@ -184,7 +184,8 @@ export default function Dashboard() {
                         <div className="flex gap-2">
                           <button
                             onClick={() => setEditingListing(listing)}
-                            disabled={!listing.isAvailable && !!listing.currentRenter}
+                            disabled={!listing.isAvailable}
+                            title={!listing.isAvailable ? "Cannot edit equipment while unavailable or rented" : undefined}
                             className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-white/5 py-2 text-xs font-semibold text-white hover:bg-white/10 transition-all disabled:opacity-50"
                           >
                             <Edit2 className="h-3.5 w-3.5" />

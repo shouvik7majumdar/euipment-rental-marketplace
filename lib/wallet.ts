@@ -59,11 +59,22 @@ export async function signTransaction(
   opts: { networkPassphrase: string; address: string }
 ): Promise<string> {
   const walletsKit = getWalletsKit();
-  const { signedTxXdr } = await walletsKit.signTransaction(xdr, {
-    networkPassphrase: opts.networkPassphrase,
-    address: opts.address,
-  });
-  return signedTxXdr;
+  
+  console.log('[wallet] signTransaction called, kit exists:', !!walletsKit);
+  console.log('[wallet] XDR length:', xdr?.length ?? 'undefined');
+  console.log('[wallet] Requesting Freighter approval popup...');
+
+  try {
+    const { signedTxXdr } = await walletsKit.signTransaction(xdr, {
+      networkPassphrase: opts.networkPassphrase,
+      address: opts.address,
+    });
+    console.log('[wallet] Transaction signed successfully');
+    return signedTxXdr;
+  } catch (err) {
+    console.error('[wallet] signTransaction error:', err);
+    throw err;
+  }
 }
 
 export async function getAvailableWallets(): Promise<ISupportedWallet[]> {

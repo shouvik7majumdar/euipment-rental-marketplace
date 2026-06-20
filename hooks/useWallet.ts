@@ -1,17 +1,40 @@
 'use client';
 
-import { useCallback } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import { useWalletStore } from '@/lib/store';
 import {
   connectWallet,
   disconnectWallet,
   getAvailableWallets,
+  kit,
 } from '@/lib/wallet';
 import { getXLMBalance } from '@/lib/soroban';
 
 export function useWallet() {
   const store = useWalletStore();
+  const hasRehydrated = useRef(false);
+
+  // Re-initialize wallet kit on page reload if persisted state says connected
+  // Without this, the kit is null after reload and signTransaction never opens Freighter
+  useEffect(() => {
+    if (hasRehydrated.current) return;
+    hasRehydrated.current = true;
+
+    if (store.isConnected && store.address && !kit) {
+      // Silently re-connect: this calls kit.getAddress() which initializes the wallet module
+      connectWallet()
+        .then(async (address) => {
+          const balance = await getXLMBalance(address);
+          store.setConnected(address, balance);
+        })
+        .catch((err) => {
+          console.warn('Failed to re-initialize wallet on reload:', err);
+          // If re-connect fails (e.g. user removed extension), reset state
+          store.setDisconnected();
+        });
+    }
+  }, [store.isConnected, store.address]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const connect = useCallback(async (walletId?: string) => {
     store.setConnecting(true);

@@ -33,7 +33,7 @@ export type TransactionStatus = 'pending' | 'success' | 'failed';
 export interface TrackedTransaction {
   id: string;
   hash: string;
-  type: 'list_equipment' | 'rent_equipment' | 'return_equipment';
+  type: 'list_equipment' | 'rent_equipment' | 'return_equipment' | 'edit_equipment' | 'delete_equipment' | 'mark_unavailable' | 'mark_available';
   status: TransactionStatus;
   description: string;
   timestamp: number;
