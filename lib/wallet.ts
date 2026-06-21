@@ -3,7 +3,6 @@
 import {
   StellarWalletsKit,
   WalletNetwork,
-  WalletType,
   ISupportedWallet,
   FREIGHTER_ID,
   FreighterModule,
