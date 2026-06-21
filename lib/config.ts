@@ -15,7 +15,7 @@ export const EXPLORER_BASE_URL = 'https://stellar.expert/explorer/testnet';
 
 export const POLL_INTERVAL_MS = 5_000; // 5 seconds for real-time event polling
 
-export const STROOPS_PER_XLM = 10_000_000n;
+export const STROOPS_PER_XLM = BigInt(10_000_000);
 
 export function stroopsToXLM(stroops: bigint): string {
   const xlm = Number(stroops) / Number(STROOPS_PER_XLM);
@@ -24,7 +24,7 @@ export function stroopsToXLM(stroops: bigint): string {
 
 export function xlmToStroops(xlm: string): bigint {
   const val = parseFloat(xlm);
-  if (isNaN(val) || val < 0) return 0n;
+  if (isNaN(val) || val < 0) return BigInt(0);
   return BigInt(Math.round(val * Number(STROOPS_PER_XLM)));
 }
 

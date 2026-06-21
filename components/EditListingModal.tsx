@@ -36,11 +36,11 @@ export function EditListingModal({ open, onClose, listing, ownerAddress }: EditL
 
     try {
       await editMutation.mutateAsync({
-        ownerAddress,
+        ownerAddress: listing.owner,
         listingId: listing.id,
         title,
-        dailyPriceStroops: xlmToStroops(Number(dailyPriceXlm)),
-        depositStroops: xlmToStroops(Number(depositXlm)),
+        dailyPriceStroops: xlmToStroops(String(dailyPriceXlm)),
+        depositStroops: xlmToStroops(String(depositXlm)),
       });
       onClose();
     } catch {

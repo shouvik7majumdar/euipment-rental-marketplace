@@ -8,10 +8,12 @@ import {
   Address,
   nativeToScVal,
   scValToNative,
+  rpc as stellarRpc,
 } from '@stellar/stellar-sdk';
-import { Server, Api } from '@stellar/stellar-sdk/rpc';
 import { CONTRACT_CONFIG, HORIZON_URL } from '@/lib/config';
 import { signTransaction } from '@/lib/wallet';
+
+const { Server, Api } = stellarRpc;
 import { EquipmentListing } from '@/types';
 
 
@@ -192,10 +194,10 @@ export async function getTotalListings(): Promise<number> {
     .build();
 
   const result = await rpc.simulateTransaction(tx);
-  if (Api.isSimulationError(result)) {
+  if (stellarRpc.Api.isSimulationError(result)) {
     throw new Error(`Simulation failed: ${result.error}`);
   }
-  const parsed = result as Api.SimulateTransactionSuccessResponse;
+  const parsed = result as stellarRpc.Api.SimulateTransactionSuccessResponse;
   return scValToNative(parsed.result!.retval) as number;
 }
 
@@ -214,8 +216,8 @@ export async function getListing(id: number): Promise<EquipmentListing | null> {
     .build();
 
   const result = await rpc.simulateTransaction(tx);
-  if (Api.isSimulationError(result)) return null;
-  const parsed = result as Api.SimulateTransactionSuccessResponse;
+  if (stellarRpc.Api.isSimulationError(result)) return null;
+  const parsed = result as stellarRpc.Api.SimulateTransactionSuccessResponse;
   const native = scValToNative(parsed.result!.retval);
   if (native === null || native === undefined) return null;
   return scValToListing(parsed.result!.retval);
@@ -275,7 +277,7 @@ export async function returnEquipment(
   const op = contract.call(
     'return_equipment',
     nativeToScVal(listingId, { type: 'u32' }),
-    nativeToScVal(refundDeposit, { type: 'bool' }),
+    nativeToScVal(refundDeposit),
   );
   return buildAndSubmitTx(ownerAddress, op, 'return_equipment');
 }
@@ -405,7 +407,7 @@ export async function getContractEvents(): Promise<SorobanContractEvent[]> {
         id: e.id,
         ledger: e.ledger,
         ledgerClosedAt: e.ledgerClosedAt,
-        contractId: e.contractId,
+        contractId: e.contractId ? e.contractId.toString() : '',
         topic: topics,
         value: parsedValue,
         txHash: e.txHash,
