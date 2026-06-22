@@ -95,3 +95,42 @@ impl RentalReputationContract {
         env.storage().persistent().get(&DataKey::Blacklist(user)).unwrap_or(false)
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use soroban_sdk::{Env, Address};
+
+    #[test]
+    fn test_reputation_flow() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let contract_id = env.register_contract(None, RentalReputationContract);
+        let client = RentalReputationContractClient::new(&env, &contract_id);
+
+        let admin = Address::generate(&env);
+        let marketplace = Address::generate(&env);
+        let user = Address::generate(&env);
+
+        client.initialize(&admin, &marketplace);
+
+        assert_eq!(client.get_reputation(&user), 100);
+        assert_eq!(client.is_blacklisted(&user), false);
+
+        // Add reputation
+        client.add_reputation(&user, &15);
+        assert_eq!(client.get_reputation(&user), 115);
+
+        // Deduct reputation
+        client.deduct_reputation(&user, &30);
+        assert_eq!(client.get_reputation(&user), 85);
+
+        // Blacklist user
+        client.set_blacklisted(&admin, &user, &true);
+        assert_eq!(client.is_blacklisted(&user), true);
+
+        client.set_blacklisted(&admin, &user, &false);
+        assert_eq!(client.is_blacklisted(&user), false);
+    }
+}
