@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  reactStrictMode: true,
+  reactStrictMode: false,
   serverExternalPackages: ['@stellar/stellar-sdk'],
   webpack: (config, { isServer }) => {
     if (!isServer) {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useListings, useListEquipment, useRentEquipment } from '@/hooks/useRentals';
 import { useWallet } from '@/hooks/useWallet';
 import { Package, Search, SlidersHorizontal, Plus, Loader2, Info, CheckCircle2, AlertTriangle } from 'lucide-react';
@@ -28,10 +28,15 @@ export default function Marketplace() {
   const [rentingItem, setRentingItem] = useState<EquipmentListing | null>(null);
   const [rentDays, setRentDays] = useState(1);
 
+  // Submit guards — prevent double-firing before isPending state propagates
+  const isListSubmitting = useRef(false);
+  const isRentSubmitting = useRef(false);
+
   // Handlers
   const handleListSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!address) return;
+    if (!address || isListSubmitting.current) return;
+    isListSubmitting.current = true;
     try {
       const priceStroops = xlmToStroops(listPrice);
       const depositStroops = xlmToStroops(listDeposit);
@@ -49,12 +54,15 @@ export default function Marketplace() {
       setListDeposit('');
     } catch {
       // toast shown by mutation
+    } finally {
+      isListSubmitting.current = false;
     }
   };
 
   const handleRentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!address || !rentingItem) return;
+    if (!address || !rentingItem || isRentSubmitting.current) return;
+    isRentSubmitting.current = true;
     try {
       await rentMutation.mutateAsync({
         renterAddress: address,
@@ -65,6 +73,8 @@ export default function Marketplace() {
       setRentDays(1);
     } catch {
       // error toast handled by mutation
+    } finally {
+      isRentSubmitting.current = false;
     }
   };
 
@@ -198,10 +208,12 @@ export default function Marketplace() {
                       className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
                         listing.isAvailable
                           ? 'bg-green-500/10 text-green-400 border border-green-500/20'
-                          : 'bg-red-500/10 text-red-400 border border-red-500/20'
+                          : listing.currentRenter
+                          ? 'bg-red-500/10 text-red-400 border border-red-500/20'
+                          : 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20'
                       }`}
                     >
-                      {listing.isAvailable ? 'Available' : 'Rented'}
+                      {listing.isAvailable ? 'Available' : listing.currentRenter ? 'Rented' : 'Unavailable'}
                     </span>
                   </div>
 
@@ -249,12 +261,16 @@ export default function Marketplace() {
                       Rent Equipment
                     </button>
                   )
-                ) : (
+                ) : listing.currentRenter ? (
                   <div className="text-xs rounded-lg bg-white/5 p-3 border border-white/5 text-center text-muted-foreground">
                     Rented by:{' '}
                     <span className="font-mono text-primary/80">
-                      {listing.currentRenter === address ? 'You' : truncateAddress(listing.currentRenter ?? '')}
+                    {listing.currentRenter === address && address ? 'You' : truncateAddress(listing.currentRenter ?? '')}
                     </span>
+                  </div>
+                ) : (
+                  <div className="text-xs rounded-lg bg-yellow-500/5 p-3 border border-yellow-500/10 text-center text-yellow-400/70">
+                    Marked unavailable by owner
                   </div>
                 )}
               </div>

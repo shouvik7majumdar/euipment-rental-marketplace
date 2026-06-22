@@ -63,6 +63,11 @@ export default function Transactions() {
                     {tx.type === 'list_equipment' && 'List Equipment'}
                     {tx.type === 'rent_equipment' && 'Rent Equipment'}
                     {tx.type === 'return_equipment' && 'Return Equipment'}
+                    {tx.type === 'edit_equipment' && 'Edit Equipment'}
+                    {tx.type === 'delete_equipment' && 'Delete Equipment'}
+                    {tx.type === 'mark_unavailable' && 'Mark Unavailable'}
+                    {tx.type === 'mark_available' && 'Mark Available'}
+                    {tx.type === 'set_blacklisted' && 'Set Blacklist Status'}
                   </h3>
                   <p className="text-sm text-muted-foreground mt-0.5">{tx.description}</p>
                   

@@ -13,6 +13,9 @@ import {
   deleteEquipment,
   markUnavailable,
   markAvailable,
+  getReputation,
+  isBlacklisted,
+  setBlacklisted,
 } from '@/lib/soroban';
 import { useTransactionStore } from '@/lib/store';
 import { EquipmentListing, RentalActivity } from '@/types';
@@ -116,12 +119,11 @@ export function useRentEquipment() {
         updateTransaction(txId, { hash, status: 'success' });
         return hash;
       } catch (e) {
-        const msg = String(e);
-        let errorMessage = msg;
-        if (msg.includes('insufficient')) errorMessage = 'Insufficient XLM balance';
-        if (msg.includes('rejected')) errorMessage = 'Transaction rejected by user';
-        updateTransaction(txId, { status: 'failed', errorMessage });
-        throw new Error(errorMessage);
+        const msg = e instanceof Error ? e.message : String(e);
+        // Pass through the actual error message from soroban.ts — do NOT transform it
+        // so users see the real reason (e.g. "equipment unavailable") not a misleading balance error
+        updateTransaction(txId, { status: 'failed', errorMessage: msg });
+        throw new Error(msg);
       }
     },
     onSuccess: (_, variables) => {
@@ -360,6 +362,68 @@ export function useMarkAvailable() {
     },
     onError: (err: Error) => {
       toast.error('Failed to update availability', { description: err.message });
+    },
+  });
+}
+
+// ─── Reputation & Blacklist Hooks ──────────────────────────────────────────
+
+export function useUserReputation(address: string | null) {
+  return useQuery({
+    queryKey: ['user-reputation', address],
+    queryFn: async () => {
+      if (!address) return { reputation: 100, isBlacklisted: false };
+      const [rep, bl] = await Promise.all([
+        getReputation(address),
+        isBlacklisted(address),
+      ]);
+      return { reputation: rep, isBlacklisted: bl };
+    },
+    enabled: !!address,
+    refetchInterval: POLL_INTERVAL_MS,
+  });
+}
+
+export function useBlacklistUser() {
+  const qc = useQueryClient();
+  const { addTransaction, updateTransaction } = useTransactionStore();
+
+  return useMutation({
+    mutationFn: async ({
+      adminAddress,
+      userAddress,
+      status,
+    }: {
+      adminAddress: string;
+      userAddress: string;
+      status: boolean;
+    }) => {
+      const txId = nanoid();
+      addTransaction({
+        id: txId,
+        hash: '',
+        type: 'set_blacklisted',
+        status: 'pending',
+        description: `${status ? 'Blacklisting' : 'Unblacklisting'} address ${userAddress.slice(0, 8)}...`,
+        timestamp: Math.floor(Date.now() / 1000),
+      });
+
+      try {
+        const hash = await setBlacklisted(adminAddress, userAddress, status);
+        updateTransaction(txId, { hash, status: 'success' });
+        return hash;
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        updateTransaction(txId, { status: 'failed', errorMessage: msg });
+        throw new Error(msg);
+      }
+    },
+    onSuccess: (_, variables) => {
+      qc.invalidateQueries({ queryKey: ['user-reputation', variables.userAddress] });
+      toast.success(`Successfully updated blacklist status for user!`);
+    },
+    onError: (err: Error) => {
+      toast.error('Failed to update blacklist status', { description: err.message });
     },
   });
 }

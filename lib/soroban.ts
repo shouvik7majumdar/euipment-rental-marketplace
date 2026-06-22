@@ -8,13 +8,88 @@ import {
   Address,
   nativeToScVal,
   scValToNative,
-  rpc as stellarRpc,
+  Transaction,
+  MuxedAccount,
+  Account,
+  StrKey,
 } from '@stellar/stellar-sdk';
+import { Server, Api } from '@stellar/stellar-sdk/rpc';
+import { TransactionBuilder as BaseTransactionBuilder } from '@stellar/stellar-base';
 import { CONTRACT_CONFIG, HORIZON_URL } from '@/lib/config';
 import { signTransaction } from '@/lib/wallet';
-
-const { Server, Api } = stellarRpc;
 import { EquipmentListing } from '@/types';
+
+// ─── Monkey-patch TransactionBuilder.cloneFrom to bypass ESM/CJS instanceof check mismatch in Next.js bundles ───
+const patchCloneFrom = (builderClass: any) => {
+  if (!builderClass || typeof builderClass.cloneFrom !== 'function') return;
+  const originalCloneFrom = builderClass.cloneFrom;
+  builderClass.cloneFrom = function (tx: any, opts?: any) {
+    try {
+      const sequenceNum = (BigInt(tx.sequence) - BigInt(1)).toString();
+      let source;
+      if (StrKey.isValidMed25519PublicKey(tx.source)) {
+        source = MuxedAccount.fromAddress(tx.source, sequenceNum);
+      } else if (StrKey.isValidEd25519PublicKey(tx.source)) {
+        source = new Account(tx.source, sequenceNum);
+      } else {
+        throw new TypeError(`unsupported tx source account: ${tx.source}`);
+      }
+
+      const unscaledFee = parseInt(tx.fee, 10) / tx.operations.length;
+      const builder = new builderClass(source, {
+        fee: (unscaledFee || BASE_FEE).toString(),
+        memo: tx.memo,
+        networkPassphrase: tx.networkPassphrase,
+        timebounds: tx.timeBounds,
+        ledgerbounds: tx.ledgerBounds,
+        minAccountSequence: tx.minAccountSequence,
+        minAccountSequenceAge: tx.minAccountSequenceAge,
+        minAccountSequenceLedgerGap: tx.minAccountSequenceLedgerGap,
+        extraSigners: tx.extraSigners,
+        ...opts
+      });
+
+      const rawTx = tx.tx || tx._tx;
+      if (rawTx && typeof rawTx.operations === 'function') {
+        rawTx.operations().forEach((op: any) => {
+          builder.addOperation(op);
+        });
+      } else {
+        tx.operations.forEach((op: any) => {
+          builder.addOperation(op);
+        });
+      }
+      return builder;
+    } catch (err) {
+      console.warn('[soroban] Custom cloneFrom failed, falling back to original:', err);
+      return originalCloneFrom.call(builderClass, tx, opts);
+    }
+  };
+};
+
+// Patch the imported TransactionBuilder classes
+patchCloneFrom(TransactionBuilder);
+patchCloneFrom(BaseTransactionBuilder);
+
+// Try to patch the required/CJS versions of TransactionBuilder if they exist separately
+if (typeof require !== 'undefined') {
+  try {
+    const sdkCJS = require('@stellar/stellar-sdk');
+    if (sdkCJS && sdkCJS.TransactionBuilder) {
+      patchCloneFrom(sdkCJS.TransactionBuilder);
+    }
+  } catch (e) {
+    // Ignore require error
+  }
+  try {
+    const baseCJS = require('@stellar/stellar-base');
+    if (baseCJS && baseCJS.TransactionBuilder) {
+      patchCloneFrom(baseCJS.TransactionBuilder);
+    }
+  } catch (e) {
+    // Ignore require error
+  }
+}
 
 
 import { toast } from 'sonner';
@@ -38,12 +113,44 @@ function scValToListing(val: xdr.ScVal): EquipmentListing {
   };
 }
 
+// ─── transaction mutex ────────────────────────────────────────────────────
+// Prevents multiple concurrent buildAndSubmitTx calls from using the same
+// account sequence number, which causes prepareTransaction to hang forever.
+let txInFlight = false;
+
+// Wraps a promise with a timeout so RPC calls never hang the UI indefinitely.
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} timed out after ${ms / 1000}s`)), ms)
+    ),
+  ]);
+}
+
 async function buildAndSubmitTx(
   sourceAddress: string,
   contractOp: xdr.Operation,
   methodName?: string,
 ): Promise<string> {
+  if (txInFlight) {
+    throw new Error('A transaction is already in progress. Please wait for it to complete.');
+  }
+  txInFlight = true;
   console.log(`[soroban] buildAndSubmitTx START — method: ${methodName}, source: ${sourceAddress}`);
+  try {
+    return await _buildAndSubmitTx(sourceAddress, contractOp, methodName);
+  } finally {
+    txInFlight = false;
+  }
+}
+
+async function _buildAndSubmitTx(
+  sourceAddress: string,
+  contractOp: xdr.Operation,
+  methodName?: string,
+): Promise<string> {
+  console.log(`[soroban] _buildAndSubmitTx — method: ${methodName}, source: ${sourceAddress}`);
 
   let account;
   try {
@@ -95,32 +202,53 @@ async function buildAndSubmitTx(
   let preparedTx;
   try {
     console.log('[soroban] Step 3: Simulating/preparing transaction...');
-    preparedTx = await rpc.prepareTransaction(tx);
+    // Round-trip through XDR to avoid ESM/CJS class identity mismatch in Next.js
+    // where the Transaction from one bundle isn't recognized by the RPC module
+    preparedTx = await withTimeout(
+      rpc.prepareTransaction(roundTripTx(tx) as Parameters<typeof rpc.prepareTransaction>[0]),
+      30_000,
+      'prepareTransaction'
+    );
     console.log('[soroban] Step 3: Transaction prepared successfully');
   } catch (err: any) {
     const rawMsg = err.message || String(err);
     let friendlyMsg = rawMsg;
-    
-    if (rawMsg.includes('UnreachableCodeReached') || rawMsg.includes('HostError') || rawMsg.includes('InvalidAction')) {
-      if (methodName === 'edit_equipment') {
-        friendlyMsg = 'Cannot edit equipment while it is unavailable or rented.';
-      } else if (methodName === 'delete_equipment') {
-        friendlyMsg = 'Cannot delete equipment while it is currently rented.';
-      } else if (methodName === 'rent_equipment') {
-        friendlyMsg = 'Equipment is already rented or unavailable.';
-      } else if (methodName === 'return_equipment') {
-        friendlyMsg = 'Equipment is not currently rented.';
-      } else if (methodName === 'mark_unavailable') {
-        friendlyMsg = 'Equipment is already unavailable.';
-      } else if (methodName === 'mark_available') {
-        friendlyMsg = 'Cannot mark available while it is rented on-chain.';
-      } else {
-        friendlyMsg = 'Transaction rejected by smart contract rules.';
+
+    // Check for smart contract logic panics (UnreachableCodeReached = soroban panic!())
+    const isContractPanic = rawMsg.includes('UnreachableCodeReached') || rawMsg.includes('HostError') || rawMsg.includes('InvalidAction') || rawMsg.includes('WasmVm');
+
+    if (isContractPanic) {
+      // Map contract panics to user-friendly messages based on which method failed
+      switch (methodName) {
+        case 'edit_equipment':
+          friendlyMsg = 'Cannot edit equipment while it is unavailable or rented.';
+          break;
+        case 'delete_equipment':
+          friendlyMsg = 'Cannot delete equipment while it is currently rented.';
+          break;
+        case 'rent_equipment':
+          friendlyMsg = 'Renting failed. The equipment might be rented, or your account might be blacklisted due to low reputation.';
+          break;
+        case 'return_equipment':
+          friendlyMsg = 'Equipment is not currently rented, so it cannot be returned.';
+          break;
+        case 'mark_unavailable':
+          friendlyMsg = 'Equipment is already marked as unavailable.';
+          break;
+        case 'mark_available':
+          friendlyMsg = 'Cannot mark available while equipment is actively rented on-chain.';
+          break;
+        case 'set_blacklisted':
+          friendlyMsg = 'Failed to update blacklist. Only the administrator can modify blacklist statuses.';
+          break;
+        default:
+          friendlyMsg = 'Transaction rejected by smart contract rules.';
       }
     } else {
-      friendlyMsg = `Simulation failed: ${rawMsg}. Make sure you have enough XLM to pay for fees.`;
+      // Non-contract error: show the raw simulation error clearly without a misleading balance check
+      friendlyMsg = `Transaction simulation failed: ${rawMsg}.`;
     }
-    
+
     throw new Error(friendlyMsg);
   }
 
@@ -179,6 +307,17 @@ async function buildAndSubmitTx(
   throw new Error(`Transaction ${hash} timed out waiting for confirmation`);
 }
 
+// ─── helpers ───────────────────────────────────────────────────────────────
+// Round-trip a Transaction through XDR serialization to resolve ESM/CJS class
+// identity mismatches that cause "expected a Transaction, got [object Object]"
+// in Next.js browser bundles.
+function roundTripTx(tx: ReturnType<TransactionBuilder['build']>) {
+  return TransactionBuilder.fromXDR(
+    tx.toXDR(),
+    CONTRACT_CONFIG.networkPassphrase
+  ) as Parameters<typeof rpc.simulateTransaction>[0];
+}
+
 // ─── read functions ────────────────────────────────────────────────────────
 
 export async function getTotalListings(): Promise<number> {
@@ -193,11 +332,11 @@ export async function getTotalListings(): Promise<number> {
     .setTimeout(30)
     .build();
 
-  const result = await rpc.simulateTransaction(tx);
-  if (stellarRpc.Api.isSimulationError(result)) {
+  const result = await rpc.simulateTransaction(roundTripTx(tx));
+  if (Api.isSimulationError(result)) {
     throw new Error(`Simulation failed: ${result.error}`);
   }
-  const parsed = result as stellarRpc.Api.SimulateTransactionSuccessResponse;
+  const parsed = result as Api.SimulateTransactionSuccessResponse;
   return scValToNative(parsed.result!.retval) as number;
 }
 
@@ -215,9 +354,9 @@ export async function getListing(id: number): Promise<EquipmentListing | null> {
     .setTimeout(30)
     .build();
 
-  const result = await rpc.simulateTransaction(tx);
-  if (stellarRpc.Api.isSimulationError(result)) return null;
-  const parsed = result as stellarRpc.Api.SimulateTransactionSuccessResponse;
+  const result = await rpc.simulateTransaction(roundTripTx(tx));
+  if (Api.isSimulationError(result)) return null;
+  const parsed = result as Api.SimulateTransactionSuccessResponse;
   const native = scValToNative(parsed.result!.retval);
   if (native === null || native === undefined) return null;
   return scValToListing(parsed.result!.retval);
@@ -277,7 +416,7 @@ export async function returnEquipment(
   const op = contract.call(
     'return_equipment',
     nativeToScVal(listingId, { type: 'u32' }),
-    nativeToScVal(refundDeposit),
+    nativeToScVal(refundDeposit, { type: 'bool' }),
   );
   return buildAndSubmitTx(ownerAddress, op, 'return_equipment');
 }
@@ -381,7 +520,12 @@ export async function getContractEvents(): Promise<SorobanContractEvent[]> {
       filters: [
         {
           type: 'contract',
-          contractIds: [CONTRACT_CONFIG.contractId],
+          contractIds: [
+            CONTRACT_CONFIG.contractId,
+            ...(CONTRACT_CONFIG.reputationContractId && CONTRACT_CONFIG.reputationContractId !== 'REPUTATION_CONTRACT_HERE'
+              ? [CONTRACT_CONFIG.reputationContractId]
+              : [])
+          ],
         },
       ],
       limit: 50,
@@ -417,4 +561,70 @@ export async function getContractEvents(): Promise<SorobanContractEvent[]> {
     console.error('Error fetching Soroban events:', error);
     return [];
   }
+}
+
+// ─── reputation query & write functions ────────────────────────────────────
+
+export async function getReputation(address: string): Promise<number> {
+  if (!CONTRACT_CONFIG.reputationContractId || CONTRACT_CONFIG.reputationContractId === 'REPUTATION_CONTRACT_HERE') {
+    return 100;
+  }
+  try {
+    const contract = new Contract(CONTRACT_CONFIG.reputationContractId);
+    const tx = new TransactionBuilder(
+      await rpc.getAccount('GBPM3ERJPONOYNS3H4N4VJDA7TGQT6TLBJCUPQ3YZ5IAMHIDFUPTCIW3'),
+      { fee: BASE_FEE, networkPassphrase: CONTRACT_CONFIG.networkPassphrase }
+    )
+      .addOperation(contract.call('get_reputation', new Address(address).toScVal()))
+      .setTimeout(30)
+      .build();
+
+    const result = await rpc.simulateTransaction(roundTripTx(tx));
+    if (Api.isSimulationError(result)) return 100;
+    const parsed = result as Api.SimulateTransactionSuccessResponse;
+    const val = scValToNative(parsed.result!.retval);
+    return typeof val === 'number' ? val : 100;
+  } catch (e) {
+    console.error('Error fetching reputation:', e);
+    return 100;
+  }
+}
+
+export async function isBlacklisted(address: string): Promise<boolean> {
+  if (!CONTRACT_CONFIG.reputationContractId || CONTRACT_CONFIG.reputationContractId === 'REPUTATION_CONTRACT_HERE') {
+    return false;
+  }
+  try {
+    const contract = new Contract(CONTRACT_CONFIG.reputationContractId);
+    const tx = new TransactionBuilder(
+      await rpc.getAccount('GBPM3ERJPONOYNS3H4N4VJDA7TGQT6TLBJCUPQ3YZ5IAMHIDFUPTCIW3'),
+      { fee: BASE_FEE, networkPassphrase: CONTRACT_CONFIG.networkPassphrase }
+    )
+      .addOperation(contract.call('is_blacklisted', new Address(address).toScVal()))
+      .setTimeout(30)
+      .build();
+
+    const result = await rpc.simulateTransaction(roundTripTx(tx));
+    if (Api.isSimulationError(result)) return false;
+    const parsed = result as Api.SimulateTransactionSuccessResponse;
+    return Boolean(scValToNative(parsed.result!.retval));
+  } catch (e) {
+    console.error('Error checking blacklist:', e);
+    return false;
+  }
+}
+
+export async function setBlacklisted(
+  adminAddress: string,
+  userAddress: string,
+  status: boolean
+): Promise<string> {
+  const contract = new Contract(CONTRACT_CONFIG.reputationContractId);
+  const op = contract.call(
+    'set_blacklisted',
+    new Address(adminAddress).toScVal(),
+    new Address(userAddress).toScVal(),
+    nativeToScVal(status, { type: 'bool' })
+  );
+  return buildAndSubmitTx(adminAddress, op, 'set_blacklisted');
 }

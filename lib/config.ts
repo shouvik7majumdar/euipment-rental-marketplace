@@ -5,6 +5,7 @@ export const STELLAR_NETWORK = process.env.NEXT_PUBLIC_STELLAR_NETWORK || 'testn
 export const CONTRACT_CONFIG: ContractConfig = {
   contractId: process.env.NEXT_PUBLIC_CONTRACT_ID || 'CONTRACT_ADDRESS_HERE',
   tokenContractId: process.env.NEXT_PUBLIC_TOKEN_CONTRACT_ID || 'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC',
+  reputationContractId: process.env.NEXT_PUBLIC_REPUTATION_CONTRACT_ID || 'REPUTATION_CONTRACT_HERE',
   networkPassphrase: process.env.NEXT_PUBLIC_STELLAR_NETWORK_PASSPHRASE || 'Test SDF Network ; September 2015',
   rpcUrl: process.env.NEXT_PUBLIC_SOROBAN_RPC_URL || 'https://soroban-testnet.stellar.org',
 };

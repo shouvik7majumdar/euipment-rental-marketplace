@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
-import { Wallet, BarChart3, Package, Activity, History, Menu, X, Zap } from 'lucide-react';
+import { Wallet, BarChart3, Package, Activity, History, Menu, X, Zap, Settings } from 'lucide-react';
 import { useWallet } from '@/hooks/useWallet';
 import { truncateAddress } from '@/lib/config';
 import { WalletModal } from '@/components/wallet/WalletModal';
@@ -14,6 +14,8 @@ const navLinks = [
   { href: '/dashboard', label: 'Dashboard', icon: BarChart3 },
   { href: '/activity', label: 'Activity', icon: Activity },
   { href: '/transactions', label: 'Transactions', icon: History },
+  { href: '/analytics', label: 'Analytics', icon: BarChart3 },
+  { href: '/settings', label: 'Settings', icon: Settings },
 ];
 
 export function Header() {
