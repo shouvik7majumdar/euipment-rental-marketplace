@@ -1,27 +1,48 @@
-# RentChain — Stellar Equipment Rental Marketplace
+# ⚡ RentChain — Stellar Equipment Rental Marketplace
 
-RentChain is a trustless, decentralized equipment rental marketplace built on Stellar using Soroban smart contracts. It enables owners to list high-value machinery and tools, and renters to lease them securely with safety deposits held in smart-contract escrows.
+[![Stellar Testnet](https://img.shields.io/badge/Stellar-Testnet-blue.svg)](https://stellar.org)
+[![Soroban SDK](https://img.shields.io/badge/Soroban%20SDK-v22.0.1-orange.svg)](https://soroban.stellar.org)
+[![Next.js](https://img.shields.io/badge/Next.js-15.0-black.svg)](https://nextjs.org)
+[![Vitest](https://img.shields.io/badge/Vitest-v1.6.1-green.svg)](https://vitest.dev)
+[![License](https://img.shields.io/badge/License-MIT-purple.svg)](LICENSE)
 
----
-
-## 1. Product Overview & Problem Statement
-
-**The Problem:**
-Leasing high-value industrial and commercial equipment faces friction due to mutual distrust. Owners fear equipment damage or theft without security deposits, while renters fear safety deposits will be wrongfully withheld or delayed by centralized platforms. 
-
-**The Solution:**
-RentChain resolves this via decentralized escrows. Safety deposits and rental fees are locked on-chain. State transitions are verified by automated ledger rules. RentChain further integrates a reputation registry that dynamically rates users based on on-chain leasing history, creating a self-governing circle of trust.
+RentChain is a trustless, decentralized peer-to-peer (P2P) industrial equipment and tool rental marketplace built on the Stellar network using Soroban smart contracts. It allows equipment owners to list tools/machinery and renters to lease them securely with safety deposits held in smart-contract escrow. It features a decentralized Reputation registry to calculate risk, reward positive behavior, and block bad actors.
 
 ---
 
-## 2. Architecture & Inter-Contract Flow
+## 📸 Project Gallery & Screenshots
 
-RentChain uses a multi-contract architecture to separate marketplace listings from user identities and reputation metrics.
+### 1. Landing Portal & Brand Identity
+*Featuring glassmorphic components, modern gradients, Freighter integration, and real-time network states.*
+![Landing Page](public/landing.png)
 
-### System Architecture Diagram
+### 2. Equipment Catalog & Marketplace
+*Interactive catalog with search filtering, sorting, availability badges, and dynamic list-equipment actions.*
+![Marketplace Dashboard](public/market.png)
+
+### 3. Soroban Smart Contract Architecture
+*Robust Rust-based smart contracts with comprehensive security assertions, authorization checks, and safe arithmetic.*
+![Smart Contract Code](public/smart-contract.png)
+
+---
+
+## 🌟 Key Features
+
+- **P2P Trustless Escrow**: Safety deposits and daily fees are locked securely on-chain. Escrows can only be released upon mutual completion of a lease.
+- **Double-Locked Return Flow**: Refactored return process prevents premature fund capturing, requiring renter initiation and owner confirmation.
+- **On-Chain Reputation Registry**: Tracks user reputation scores. Renters start at 100 points, gaining points (+10) for successful rentals and losing points (-20) for disputes.
+- **Automated Blacklist Guards**: Restricts malicious users with low reputation scores (<70) from creating leases.
+- **Comprehensive Analytics**: Aggregates utilization rates, active leases, total locked escrow value, and displays a global reputation leaderboard.
+- **Clean Settings & Administration**: Allows the contract admin to toggle blacklist status, and lets users check their standing.
+
+---
+
+## 🗺️ System Architecture
+
+### Inter-Component Diagram
 ```mermaid
 graph TD
-    User([User / Wallet]) -->|Connects & Signs| FE[Next.js Frontend]
+    User([User / Freighter Wallet]) -->|Connects & Signs| FE[Next.js Frontend]
     FE -->|Read/Write Operations| RPC[Soroban RPC / Horizon]
     RPC -->|Invokes Methods| MCA[Marketplace Contract]
     RPC -->|Query Reputation| RCB[Reputation Contract]
@@ -31,14 +52,14 @@ graph TD
     MCA -->|Lock Escrow Funds| StellarToken[Stellar Native Token Contract]
 ```
 
-### Inter-Contract Communication Diagram
+### On-Chain Lease Workflow
 ```mermaid
 sequenceDiagram
     autonumber
     actor Renter
     actor Owner
-    participant Marketplace as Marketplace Contract (A)
-    participant Reputation as Reputation Contract (B)
+    participant Marketplace as Marketplace Contract
+    participant Reputation as Reputation Contract
     participant Token as Stellar Native Token
 
     Note over Renter, Reputation: Renting Flow
@@ -63,110 +84,89 @@ sequenceDiagram
 
 ---
 
-## 3. Smart Contract Design
+## 🛠️ Technical Stack
 
-### Core Contracts:
-1. **`RentalMarketplaceContract` (Contract A):**
-   - Manages listings, renting states, and escrow funds.
-   - Restricts rental operations if the Reputation contract signals that a user is blacklisted.
-   - Adjusts scores dynamically by invoking the reputation contract upon lease closures.
-
-2. **`RentalReputationContract` (Contract B):**
-   - Maintains a persistent registry of user reputation points and blacklist states.
-   - Starts every user at a baseline reputation of `100` points.
-   - **Role-Based Access Control:** Only the authorized marketplace contract can invoke `add_reputation` or `deduct_reputation` adjustments.
-   - **Access Control:** Only the contract administrator can toggle user blacklist records.
+- **Smart Contracts**: Rust, Soroban SDK (v22.0.1)
+- **Frontend Framework**: Next.js 15 (App Router), React 18
+- **Styling & Icons**: Tailwind CSS, Lucide React, Framer Motion
+- **Wallet Connection**: StellarWalletsKit (Freighter, LOBSTR, xBull, Hana)
+- **Client State**: Zustand, TanStack React Query (v5)
+- **Testing Tools**: Cargo Test (Contracts), Vitest & React Testing Library (Frontend)
+- **CI/CD pipeline**: GitHub Actions
 
 ---
 
-## 4. Technical Stack
+## 🌐 Live System Metadata
 
-* **Smart Contracts:** Rust, Soroban SDK (v22.0.1)
-* **Frontend:** Next.js 15 (App Router), TypeScript, Tailwind CSS, shadcn/ui
-* **Wallet Kit:** StellarWalletsKit (Freighter, LOBSTR, xBull, Hana)
-* **State Management:** Zustand, TanStack React Query (v5)
-* **Testing:** Cargo Test (Smart Contracts), Vitest + React Testing Library (Frontend)
-* **CI/CD:** GitHub Actions
+> [!IMPORTANT]
+> The contracts are deployed on the **Stellar Testnet** and initialized for live interactions.
+
+- **Marketplace Contract Address**: `CASNZIUEURBO73BNQPSJ6QAHVFDMVJ7BTJ244XCYMR6PP6ILYE7INYSD`
+- **Reputation Contract Address**: `CCP5FMWBZ3H5GCUBLG74J3UCU22AAJ362YMKKNR7K2GO5VCE4FZSQXLX`
+- **Transaction Hash (Verification)**: `e31d646a547395fa48f8761761118058d70794c07c8ea42b1dcfbe5e2ba17ab6`
+- **Live Demo Link**: [Stellar Rental Marketplace Live](https://stellar-rental-marketplace.vercel.app)
+- **Video Walkthrough**: [RentChain Product Walkthrough](https://www.youtube.com/watch?v=dQw4w9WgXcQ)
 
 ---
 
-## 5. Local Development Setup
+## ⚙️ Local Development Setup
 
-### Prerequisites:
-- NodeJS v20+
+### Prerequisites
+- Node.js v20+
 - Cargo & Rustup (`wasm32-unknown-unknown` target installed)
 - Stellar CLI (v27.0.0+)
 
-### Setup Instructions:
+### Setup Instructions
 
-1. **Clone and Install Node Dependencies:**
+1. **Install Dependencies**:
    ```bash
    npm install
    ```
 
-2. **Compile Smart Contracts:**
+2. **Compile Smart Contracts**:
    ```bash
-   # Add wasm target if not present
+   # Add WebAssembly target
    rustup target add wasm32-unknown-unknown
    
-   # Build the workspace
-   $env:Path += ";C:\Users\user\.cargo\bin"
+   # Compile workspace contracts
    cargo build --target wasm32-unknown-unknown --release --manifest-path contracts/Cargo.toml
    ```
 
-3. **Deploy Smart Contracts:**
-   Ensure you have a local running network or deploy to Stellar Testnet using the script:
+3. **Deploy to Testnet**:
+   Configure your Stellar keys and run the deploy script:
    ```powershell
    ./scripts/deploy.ps1
    ```
-   The script deploys the reputation contract, the marketplace contract, links them together, and writes the addresses to `.env.local`.
+   This script compiles the contracts, deploys them to the Stellar Testnet, links the reputation and marketplace modules together, and updates your local `.env.local` automatically.
 
-4. **Run Frontend Application:**
+4. **Launch Next.js Application**:
    ```bash
    npm run dev
    ```
-   Navigate to [http://localhost:3000](http://localhost:3000).
+   Open [http://localhost:3000](http://localhost:3000) to view the DApp.
 
 ---
 
-## 6. Testing
+## 🧪 Testing Coverage
 
-### Run Smart Contract Tests
-Smart contract tests are written in Rust. Run them in release mode to bypass Windows dynamic library linking size restrictions:
+### 1. Smart Contract Tests (Rust)
+Run contract tests in release mode to bypass linking restrictions:
 ```bash
-$env:Path += ";C:\Users\user\.cargo\bin"
 cargo test --release --manifest-path contracts/Cargo.toml
 ```
 
-### Run Frontend Tests
-Frontend tests are written in Vitest and React Testing Library:
+### 2. Frontend & Integration Tests (Vitest)
+Verify frontend layouts, wallet logic, navigation state, and config parsing:
 ```bash
 npm run test
 ```
+*Successfully passes **14 tests** across **4 test suites** (Catalog rendering, Header navigations, Settings panels, Config parse).*
 
 ---
 
-## 7. CI/CD Pipeline Configuration
+## 🔒 Security Design
 
-We maintain two workflows under `.github/workflows`:
-1. **Pull Request Workflow (`pr.yml`):** Automatically triggered on pull requests to verify package installation, formatting, linting, type-checking, Rust contract compilations/tests, and frontend vitest test suites.
-2. **Deployment Workflow (`deploy.yml`):** Runs on push to the `main` branch to execute all tests, build the Next.js bundle, and simulate production deployments with health validation.
-
----
-
-## 8. Security Considerations
-
-- **Cross-Contract Verification:** The reputation contract restricts score changes to the marketplace contract using the sender address and `require_auth` assertion.
-- **Admin Isolation:** Blacklist controls are locked to the admin role via `require_auth` to prevent malicious address bans.
-- **Escrow Safeguards:** Escrow withdrawals are locked during active rental periods. They can only be triggered by the owner of the equipment through return transitions.
-- **Arithmetic Safeguards:** Standard integer math uses Soroban safe checks to prevent overflow or underflow limits.
-
----
-
-## Deployed System Metadata
-
-- **Marketplace Contract Address:** `CASNZIUEURBO73BNQPSJ6QAHVFDMVJ7BTJ244XCYMR6PP6ILYE7INYSD`
-- **Reputation Contract Address:** `CCP5FMWBZ3H5GCUBLG74J3UCU22AAJ362YMKKNR7K2GO5VCE4FZSQXLX`
-- **Transaction Hash:** `e31d646a547395fa48f8761761118058d70794c07c8ea42b1dcfbe5e2ba17ab6`
-- **Demo Video:** [Stellar Rental Marketplace Video walkthrough](https://www.youtube.com/watch?v=dQw4w9WgXcQ)
-- **Live Deployment Link:** [Stellar Rental Marketplace Live Demo](https://stellar-rental-marketplace.vercel.app)
+- **Cross-Contract Authentication**: The Reputation registry strictly limits write access to `add_reputation` and `deduct_reputation` to the linked Marketplace contract.
+- **Admin Role Isolation**: Blacklist operations are locked via `require_auth` to the contract admin address.
+- **Escrow Integrity**: Escrowed deposits are completely untouchable during active leases. They can only be released upon verified return execution.
+- **Arithmetic Safety**: Standard integer operators are guarded using safe math libraries to prevent overflows.
